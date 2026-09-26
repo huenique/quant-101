@@ -1,4 +1,4 @@
-# quant-demos
+# quant-101
 
 Teaching and demo material explaining quant trading concepts. Each demo is a standalone HTML file — open it in a browser.
 
