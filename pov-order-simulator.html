@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>POV order simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5F9; --panel:#FFFFFF; --ink:#18223A; --muted:#66708A; --line:#DCE1EA;
+  --fill:#C98A12; --vol:#8FA6CC; --price:#C4456A; --ok:#2E7D5B; --warn:#B4541F;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10182B; --panel:#18223A; --ink:#E6E9F2; --muted:#8792AB; --line:#2A3654;
+  --fill:#F2B544; --vol:#4C6FA8; --price:#E86F8C; --ok:#5CC28F; --warn:#F08A4B;}}
+:root[data-theme="dark"]{--bg:#10182B; --panel:#18223A; --ink:#E6E9F2; --muted:#8792AB; --line:#2A3654;
+  --fill:#F2B544; --vol:#4C6FA8; --price:#E86F8C; --ok:#5CC28F; --warn:#F08A4B;}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 18px 40px;display:grid;grid-template-columns:300px 1fr;gap:22px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}}
+h1{font-size:22px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;align-self:start}
+label{display:block;font-size:13px;color:var(--muted);margin:14px 0 5px}
+input,select{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--fill);outline-offset:1px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.seg.two{grid-template-columns:1fr 1fr}
+.seg button{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:7px 0;font:inherit;font-size:13px;cursor:pointer}
+.seg button[aria-pressed="true"]{border-color:var(--fill);background:color-mix(in srgb,var(--fill) 16%,transparent)}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.btn{margin-top:18px;width:100%;background:var(--fill);color:#1b1405;border:0;border-radius:6px;padding:10px;font:inherit;font-weight:600;cursor:pointer}
+main{min-width:0}
+.status{font-size:17px;margin:0 0 14px}
+.status b{font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:16px}
+@media (max-width:600px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--panel);padding:12px 14px}
+.kpi span{display:block;font-size:12px;color:var(--muted)}
+.kpi strong{font-size:18px;font-weight:600}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:16px}
+canvas{width:100%;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.tbl{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--muted);font-size:13px}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:0}
+tr.cur td{background:color-mix(in srgb,var(--fill) 10%,transparent)}
+h2{font-size:15px;font-weight:600;margin:20px 0 8px}
+.note{font-size:13px;color:var(--muted);max-width:70ch}
+.explain{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--fill);border-radius:10px;padding:16px 18px;margin-bottom:18px}
+.explain h2{margin:0 0 8px;font-size:17px}
+.explain p{margin:0 0 10px;max-width:72ch}
+.explain .yours{background:color-mix(in srgb,var(--fill) 12%,transparent);border-radius:6px;padding:10px 12px;margin:12px 0}
+.explain table{font-size:13px;margin:6px 0 10px}
+.explain th,.explain td{padding:6px 10px}
+.explain .tag{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<aside>
+  <h1>POV simulator</h1>
+  <p class="sub">Slices a parent order into child fills sized off each minute's market volume.</p>
+
+  <label>Side</label>
+  <div class="seg two" id="side"><button data-v="buy" aria-pressed="true">Buy</button><button data-v="sell">Sell</button></div>
+
+  <label for="amt">Amount (BTC)</label>
+  <input id="amt" type="number" value="50" min="0" step="any">
+
+  <label>Target participation rate</label>
+  <div class="seg" id="rate">
+    <button data-v="0.05">Low</button><button data-v="0.10" aria-pressed="true">Medium</button>
+    <button data-v="0.20">High</button><button data-v="0.40">Very High</button>
+  </div>
+  <div class="hint">5%, 10%, 20%, up to 40% of market volume</div>
+
+  <label for="valid">Valid for</label>
+  <select id="valid"><option value="1" selected>1 Day</option><option value="2">2 Days</option><option value="3">3 Days</option></select>
+
+  <label for="trig">Trigger price (USDT, optional)</label>
+  <input id="trig" type="number" placeholder="Start immediately" step="any">
+
+  <label for="lim">Price limit (USDT, optional)</label>
+  <input id="lim" type="number" placeholder="No limit" step="any">
+  <div class="hint">Buy pauses above the limit, sell pauses below it</div>
+
+  <label for="p0">Starting price (USDT)</label>
+  <input id="p0" type="number" value="65000" step="any">
+
+  <label for="vol">Avg market volume per minute (BTC)</label>
+  <input id="vol" type="number" value="15" step="any">
+
+  <label for="sig">Annualized volatility (%)</label>
+  <input id="sig" type="number" value="50" step="any">
+
+  <button class="btn" id="newmkt">New random market</button>
+</aside>
+
+<main>
+  <section class="explain">
+    <h2>What POV means, in plain terms</h2>
+    <p>Say you need 500 sacks of rice from the market. Walk in and ask for all 500 at once and every seller notices. Prices jump, and the last sacks cost you way more than the first. Traders call that jump market impact.</p>
+    <p>POV is the patient way to do it. You tell a helper "for every 10 sacks anyone else buys, you buy 1." When the market is busy your helper buys fast. When it's quiet they slow down or wait. You blend into the crowd, so nobody marks up the price on you.</p>
+    <p>Binance does the same thing with your coins. The rate you pick (Low, Medium, High, Very High) is how big your slice of the crowd is.</p>
+    <div class="yours" id="exYours"></div>
+    <table>
+      <thead><tr><th>Minute</th><th>Market mood</th><th>Market traded</th><th id="exHead">You buy</th><th>Done so far</th></tr></thead>
+      <tbody id="exRows"></tbody>
+    </table>
+    <p class="note">Higher rate means you finish sooner but stand out more, so each coin costs a bit more. Lower rate means cheaper fills but it takes longer, and the price can drift away while you wait. The sim below lets you test both on the same fake market.</p>
+  </section>
+
+  <p class="status" id="status"></p>
+  <div class="kpis">
+    <div class="kpi"><span>Filled</span><strong id="kFill"></strong></div>
+    <div class="kpi"><span>Time to finish</span><strong id="kTime"></strong></div>
+    <div class="kpi"><span>Avg fill price</span><strong id="kAvg"></strong></div>
+    <div class="kpi"><span>Vs arrival price</span><strong id="kSlip"></strong></div>
+  </div>
+
+  <div class="chart">
+    <canvas id="cv" height="420" aria-label="Price, market volume and fills over time"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--price)"></i>Price</span>
+      <span><i style="background:var(--vol)"></i>Market volume</span>
+      <span><i style="background:var(--fill)"></i>Your fills</span>
+      <span><i style="background:var(--muted)"></i>Trigger / limit</span>
+    </div>
+  </div>
+
+  <h2>Same market, every rate</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Rate</th><th>Filled</th><th>Time</th><th>Avg price</th><th>Vs arrival</th><th>Vs market VWAP</th></tr></thead>
+    <tbody id="cmp"></tbody>
+  </table></div>
+
+  <h2>How the model works</h2>
+  <p class="note">Each minute the market prints random volume (daily cycle plus bursts) and price follows a random walk. Once active, the algo fills your rate times that minute's volume until the amount is done or the order expires. Fills cost a small impact that grows with the rate (about 3 bps at Low, 10 bps at Very High). Higher rates finish faster but pay more impact and ride less of the price path. This is a toy model, real Binance child sizing and impact will differ.</p>
+</main>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let seed=Math.floor(Math.random()*1e9);
+const state={side:'buy',rate:0.10};
+
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gauss(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+
+function market(n,p0,avgVol,sigAnn){
+  const r=rng(seed), s=sigAnn/100/Math.sqrt(525600);
+  const P=new Float64Array(n),V=new Float64Array(n);
+  let lp=Math.log(p0), burst=0;
+  for(let t=0;t<n;t++){
+    const z=gauss(r); lp+=s*z; P[t]=Math.exp(lp);
+    if(burst>0)burst--; else if(r()<0.004)burst=20+Math.floor(r()*40);
+    const season=1+0.4*Math.sin(2*Math.PI*t/1440);
+    V[t]=avgVol*season*Math.exp(0.6*gauss(r)-0.18)*(0.75+0.25*Math.abs(z))*(burst>0?3:1);
+  }
+  return{P,V};
+}
+
+function simulate(m,o,rate){
+  const n=m.P.length, sgn=o.side==='buy'?1:-1;
+  let active=o.trig==null, at=active?0:-1, arrival=active?m.P[0]:null;
+  const up=o.trig!=null&&o.trig>=m.P[0];
+  let rem=o.amt, cost=0, mN=0, mV=0, done=-1, paused=0;
+  const F=new Float64Array(n);
+  for(let t=0;t<n;t++){
+    const p=m.P[t];
+    if(!active){ if(up?p>=o.trig:p<=o.trig){active=true;at=t;arrival=p;} else continue; }
+    mN+=p*m.V[t]; mV+=m.V[t];
+    const ok=o.lim==null||(sgn>0?p<=o.lim:p>=o.lim);
+    if(!ok){paused++;continue;}
+    const q=Math.min(rem,rate*m.V[t]);
+    const px=p*(1+sgn*(1+22*rate)*1e-4);
+    F[t]=q; cost+=q*px; rem-=q;
+    if(rem<=1e-9){rem=0;done=t;break;}
+  }
+  const filled=o.amt-rem, avg=filled?cost/filled:null;
+  return{F,filled,rem,avg,arrival,at,done,paused,active,
+    vwap:mV?mN/mV:null,
+    slip:avg&&arrival?sgn*(avg-arrival)/arrival*1e4:null,
+    vsV:avg&&mV?sgn*(avg-mN/mV)/(mN/mV)*1e4:null};
+}
+
+const fmtT=m=>{if(m==null)return'—';const h=Math.floor(m/60),mm=m%60;return h?`${h}h ${mm}m`:`${mm}m`};
+const fmtP=x=>x==null?'—':x.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2});
+const fmtB=x=>(x>=0?'+':'')+x.toFixed(1)+' bps';
+const num=id=>{const v=$(id).value.trim();return v===''?null:+v};
+
+function run(){
+  const o={side:state.side,amt:+$('amt').value||0,trig:num('trig'),lim:num('lim')};
+  const n=+$('valid').value*1440;
+  const m=market(n,+$('p0').value||1,+$('vol').value||1,+$('sig').value||0);
+  const s=simulate(m,o,state.rate);
+
+  const est=o.amt/(state.rate*(+$('vol').value||1));
+  let st;
+  if(!s.active) st=`<b>Never triggered.</b> Price did not reach ${fmtP(o.trig)} within the window.`;
+  else if(s.done>=0) st=`<b>Completed</b> in ${fmtT(s.done-s.at+1)}. Rough estimate going in was ${fmtT(Math.round(est))}.`;
+  else st=`<b>Expired</b> with ${s.rem.toFixed(4)} BTC unfilled (${(s.rem/o.amt*100).toFixed(1)}%).`;
+  if(s.paused) st+=` Paused ${fmtT(s.paused)} by the price limit.`;
+  $('status').innerHTML=st;
+  $('kFill').textContent=`${s.filled.toFixed(3)} BTC`;
+  $('kTime').textContent=s.done>=0?fmtT(s.done-s.at+1):'—';
+  $('kAvg').textContent=fmtP(s.avg);
+  const k=$('kSlip'); k.textContent=s.slip==null?'—':fmtB(s.slip);
+  k.style.color=s.slip==null?'':s.slip>0?'var(--warn)':'var(--ok)';
+
+  const names={0.05:'Low 5%',0.10:'Medium 10%',0.20:'High 20%',0.40:'Very High 40%'};
+  $('cmp').innerHTML=[0.05,0.10,0.20,0.40].map(r=>{
+    const x=simulate(m,o,r);
+    return `<tr class="${r===state.rate?'cur':''}"><td>${names[r]}</td><td>${(x.filled/o.amt*100||0).toFixed(1)}%</td>
+    <td>${x.done>=0?fmtT(x.done-x.at+1):x.active?'expired':'no trigger'}</td><td>${fmtP(x.avg)}</td>
+    <td>${x.slip==null?'—':fmtB(x.slip)}</td><td>${x.vsV==null?'—':fmtB(x.vsV)}</td></tr>`}).join('');
+
+  draw(m,s,o);
+  explain(o);
+}
+
+function explain(o){
+  const verb=o.side==='buy'?'buy':'sell', Verb=verb[0].toUpperCase()+verb.slice(1);
+  const vol=+$('vol').value||1, r=state.rate, pct=Math.round(r*100);
+  const lvl={0.05:'Low',0.10:'Medium',0.20:'High',0.40:'Very High'}[r];
+  const per=r*vol, mins=o.amt/per, usd=o.amt*(+$('p0').value||0);
+  $('exYours').innerHTML=`<b>Your order right now.</b> You want to ${verb} ${o.amt} BTC (about $${Math.round(usd).toLocaleString()}). The market trades about ${vol} BTC a minute. At ${lvl} (${pct}%) you ${verb} roughly ${per.toFixed(2)} BTC a minute, so it should take around ${fmtT(Math.round(mins))} if the market stays normal.`;
+  $('exHead').textContent=`You ${verb} (${pct}%)`;
+  const ex=[[1.5,'busy'],[0.5,'quiet'],[1,'normal'],[0.2,'dead'],[2,'news hits']];
+  let cum=0;
+  $('exRows').innerHTML=ex.map(([k,mood],i)=>{
+    const mv=vol*k, q=Math.min(Math.max(o.amt-cum,0),r*mv); cum+=q;
+    return `<tr><td>${i+1}</td><td class="tag">${mood}</td><td>${mv.toFixed(1)} BTC</td><td>${q.toFixed(2)} BTC</td><td>${o.amt?(cum/o.amt*100).toFixed(1):0}%</td></tr>`}).join('');
+}
+
+function draw(m,s,o){
+  const cv=$('cv'), dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=420;
+  cv.width=W*dpr; cv.height=H*dpr; const c=cv.getContext('2d'); c.scale(dpr,dpr);
+  const css=getComputedStyle(document.documentElement), col=v=>css.getPropertyValue(v).trim();
+  c.clearRect(0,0,W,H);
+  const n=m.P.length;
+  let end=s.done>=0?Math.min(n,Math.ceil((s.done+1)*1.15)+30):n;
+  const start=Math.max(0,(s.at>0?s.at:0)-Math.round(end*0.05));
+  const len=end-start, L=64, R=12, pTop=8, pH=190, vTop=220, vH=170;
+  const bw=Math.max(1,Math.ceil(len/Math.max(60,Math.floor((W-L-R)/3))));
+  const bars=Math.ceil(len/bw), x=i=>L+(i/bars)*(W-L-R);
+
+  let lo=Infinity,hi=-Infinity;
+  for(let t=start;t<end;t++){lo=Math.min(lo,m.P[t]);hi=Math.max(hi,m.P[t]);}
+  [o.trig,o.lim].forEach(v=>{if(v!=null&&v>lo-(hi-lo)&&v<hi+(hi-lo)){lo=Math.min(lo,v);hi=Math.max(hi,v);}});
+  const pad=(hi-lo)*0.08||1; lo-=pad; hi+=pad;
+  const y=p=>pTop+pH-(p-lo)/(hi-lo)*pH;
+
+  c.font='11px "IBM Plex Sans",sans-serif'; c.fillStyle=col('--muted'); c.strokeStyle=col('--line'); c.lineWidth=1;
+  for(let i=0;i<=3;i++){const p=lo+(hi-lo)*i/3,yy=y(p);c.beginPath();c.moveTo(L,yy);c.lineTo(W-R,yy);c.stroke();c.fillText(Math.round(p).toLocaleString(),4,yy+4);}
+
+  c.setLineDash([4,4]); c.strokeStyle=col('--muted');
+  [[o.trig,'trigger'],[o.lim,'limit']].forEach(([v,lbl])=>{if(v==null)return;const yy=y(v);if(yy<pTop||yy>pTop+pH)return;
+    c.beginPath();c.moveTo(L,yy);c.lineTo(W-R,yy);c.stroke();c.fillText(lbl,W-R-40,yy-4);});
+  c.setLineDash([]);
+
+  c.strokeStyle=col('--price'); c.lineWidth=1.5; c.beginPath();
+  for(let i=0;i<bars;i++){const t=Math.min(end-1,start+i*bw+bw-1);const xx=x(i+1);i?c.lineTo(xx,y(m.P[t])):c.moveTo(xx,y(m.P[t]));}
+  c.stroke();
+
+  const BV=[],BF=[];let vmax=0;
+  for(let i=0;i<bars;i++){let v=0,f=0;for(let t=start+i*bw;t<Math.min(end,start+(i+1)*bw);t++){v+=m.V[t];f+=s.F[t];}BV.push(v);BF.push(f);vmax=Math.max(vmax,v);}
+  const vy=v=>vTop+vH-(v/vmax)*vH, w=Math.max(1,(W-L-R)/bars-1);
+  for(let i=0;i<bars;i++){
+    c.fillStyle=col('--vol'); c.fillRect(x(i),vy(BV[i]),w,vTop+vH-vy(BV[i]));
+    if(BF[i]>0){c.fillStyle=col('--fill'); c.fillRect(x(i),vy(BF[i]),w,vTop+vH-vy(BF[i]));}
+  }
+  c.fillStyle=col('--muted');
+  c.fillText(`${vmax.toFixed(0)} BTC`,4,vTop+8); c.fillText(`per ${bw}m`,4,vTop+22);
+
+  let cum=0; c.strokeStyle=col('--fill'); c.lineWidth=2; c.beginPath();
+  for(let i=0;i<bars;i++){cum+=BF[i];const yy=vTop+vH-(cum/o.amt)*vH;i?c.lineTo(x(i+1),yy):c.moveTo(x(i+1),yy);}
+  c.stroke(); c.fillText('cumulative fill →100%',W-R-128,vTop+10);
+
+  const ticks=6;
+  for(let i=0;i<=ticks;i++){const t=Math.round(len*i/ticks);c.fillText(fmtT(start+t),L+(W-L-R)*i/ticks-10,H-8);}
+}
+
+function seg(id,key,parse){$(id).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  [...$(id).children].forEach(x=>x.setAttribute('aria-pressed',x===b));state[key]=parse(b.dataset.v);run();});}
+seg('side','side',v=>v); seg('rate','rate',v=>+v);
+['amt','valid','trig','lim','p0','vol','sig'].forEach(id=>$(id).addEventListener('input',run));
+$('newmkt').addEventListener('click',()=>{seed=Math.floor(Math.random()*1e9);run();});
+window.addEventListener('resize',run);
+run();
+</script>
+</body>
+</html>
